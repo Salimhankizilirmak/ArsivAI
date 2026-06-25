@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: gida_rehberi_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-gida_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-gida_secure_pass}
+      POSTGRES_DB: ${DB_NAME:-gida_rehberi}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gida_rehberi_web
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://gida_user:gida_secure_pass@db:5432/gida_rehberi
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-super-secret-nextauth-key-123}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      LICENSE_SECRET_KEY: ${LICENSE_SECRET_KEY:-novexistech-crypto-key}
+      CENTRAL_LICENSE_API: https://licensing.novexistech.com/api/check
+    depends_on:
+      - db
+    volumes:
+      - ./.license:/app/.license:ro
+
+volumes:
+  postgres_data:
