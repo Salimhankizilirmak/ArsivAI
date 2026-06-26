@@ -18,11 +18,7 @@ export async function preprocessImage(inputBuffer: Buffer): Promise<ProcessedIma
       .rotate() // EXIF meta-datasına göre resmi otomatik olarak dikey (dik) konuma getirir
       .grayscale() // Renk gürültülerini elemek için siyah-beyaz yapar
       .normalize() // Kontrast aralığını normalize ederek soluk yazıları koyulaştırır
-      .sharpen({
-        sigma: 1.5,
-        flat: 1.0,
-        jagged: 2.0
-      }) // Yazıların kenarlarını ve el yazısı çizgilerini keskinleştirir
+      .sharpen(1.5, 1.0, 2.0) // Yazıların kenarlarını ve el yazısı çizgilerini keskinleştirir
       .resize({
         width: 1600,
         height: 1600,
