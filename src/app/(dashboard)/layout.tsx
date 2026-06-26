@@ -37,6 +37,9 @@ export default async function DashboardLayout({
             <a href="/review" className="flex items-center space-x-3 px-4 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
               <span>🔍 Kalite Doğrulama</span>
             </a>
+            <a href="/admin/ai-playground" className="flex items-center space-x-3 px-4 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+              <span>🔬 AI Playground</span>
+            </a>
           </nav>
         </div>
 
