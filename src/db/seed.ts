@@ -19,20 +19,44 @@ async function seed() {
 
     console.log(`Tenant oluşturuldu: ${tenant.companyName} [ID: ${tenant.id}]`);
 
-    // 2. Örnek Kalite Müdürü Kullanıcısı Oluştur
-    console.log('Kullanıcı (User) ekleniyor...');
+    // 2. Örnek Kullanıcılar Oluştur (Kalite Müdürü ve Vardiya Amiri)
+    console.log('Kullanıcılar (Users) ekleniyor...');
     const passwordHash = await bcrypt.hash('password123', 10);
-    const [user] = await db.insert(schema.users).values({
+    
+    // 2.1. Kemal Kalite (Kalite Müdürü)
+    const [user1] = await db.insert(schema.users).values({
       tenantId: tenant.id,
       name: 'Kemal Kalite',
       email: 'kalite@novexistech.com',
       passwordHash: passwordHash,
       role: 'KALITE_MUDURU',
     }).returning();
+    console.log(`Kullanıcı oluşturuldu: ${user1.name} (${user1.email}) - Rol: KALITE_MUDURU`);
 
-    console.log(`Kullanıcı oluşturuldu: ${user.name} (${user.email}) - Şifre: password123 [ID: ${user.id}]`);
+    // 2.2. Mehmet Düvenci (Vardiya Amiri / Operatör)
+    const [user2] = await db.insert(schema.users).values({
+      tenantId: tenant.id,
+      name: 'Mehmet Düvenci', // Soyadı düzeltilmiş el yazısı sahibi
+      email: 'mehmet.duvenci@novexistech.com',
+      passwordHash: passwordHash,
+      role: 'VARDIYA_AMIRI',
+    }).returning();
+    console.log(`Kullanıcı oluşturuldu: ${user2.name} (${user2.email}) - Rol: VARDIYA_AMIRI`);
 
-    // 3. Örnek Form Tipleri Ekle
+    // 3. Örnek Ürün Sözlüğü Ekle (Fuzzy Match için)
+    console.log('Ürünler (Products) ekleniyor...');
+    const productsData = [
+      { tenantId: tenant.id, productName: 'Triton' },
+      { tenantId: tenant.id, productName: 'Taco' },
+      { tenantId: tenant.id, productName: 'Kutlu Rulo' },
+    ];
+
+    for (const prod of productsData) {
+      const [inserted] = await db.insert(schema.products).values(prod).returning();
+      console.log(`Ürün eklendi: ${inserted.productName}`);
+    }
+
+    // 4. Örnek Form Tipleri Ekle
     console.log('Form Tipleri (Form Types) ekleniyor...');
     const formTypesData = [
       { tenantId: tenant.id, displayName: 'Metal Dedektör Temizlik Formu' },

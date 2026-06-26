@@ -55,10 +55,21 @@ export const formSubmissions = pgTable('form_submissions', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// 5. Products (Ürünler)
+export const products = pgTable('products', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id')
+    .references(() => tenants.id, { onDelete: 'cascade' })
+    .notNull(),
+  productName: text('product_name').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // --- Tablo İlişkileri ---
 
 export const tenantsRelations = relations(tenants, ({ many }) => ({
   users: many(users),
+  products: many(products),
   formTypes: many(formTypes),
   formSubmissions: many(formSubmissions),
 }));
@@ -91,5 +102,12 @@ export const formSubmissionsRelations = relations(formSubmissions, ({ one }) => 
   verifier: one(users, {
     fields: [formSubmissions.verifiedBy],
     references: [users.id],
+  }),
+}));
+
+export const productsRelations = relations(products, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [products.tenantId],
+    references: [tenants.id],
   }),
 }));

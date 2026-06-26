@@ -13,6 +13,7 @@ interface ControlRow {
 interface ParsedForm {
   tarih: string;
   formAdi: string;
+  urunAdi: string;
   kontroller: ControlRow[];
   notlar: string;
 }
@@ -42,6 +43,7 @@ export default function ReviewPageClient({ initialSubmissions }: { initialSubmis
     setFormData({
       tarih: data.tarih || '',
       formAdi: data.formAdi || sub.formTypeName,
+      urunAdi: data.urunAdi || '',
       kontroller: Array.isArray(data.kontroller) 
         ? data.kontroller.map(c => ({
             saat: c.saat || '',
@@ -188,7 +190,7 @@ export default function ReviewPageClient({ initialSubmissions }: { initialSubmis
             </div>
 
             {/* Temel Meta Bilgileri */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs text-slate-400 mb-1.5 uppercase font-mono font-semibold">Tarih</label>
                 <input
@@ -205,6 +207,15 @@ export default function ReviewPageClient({ initialSubmissions }: { initialSubmis
                   value={formData.formAdi}
                   onChange={(e) => setFormData({ ...formData, formAdi: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5 uppercase font-mono font-semibold">Ürün Adı (Auto-Learn)</label>
+                <input
+                  type="text"
+                  value={formData.urunAdi}
+                  onChange={(e) => setFormData({ ...formData, urunAdi: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 text-slate-100 font-semibold text-teal-400"
                 />
               </div>
             </div>

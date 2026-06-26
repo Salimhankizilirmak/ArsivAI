@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     // 4. OpenAI Vision API ile el yazısı ve tablo verisini oku
     console.log('Vision AI ile el yazısı tahlili başlatılıyor...');
-    const dynamicData = await parseFormWithAI(processedImage.buffer, formTypeId);
+    const dynamicData = await parseFormWithAI(processedImage.buffer, formTypeId, tenantId);
     console.log('Vision AI tahlili başarıyla tamamlandı.');
 
     // 5. Veritabanına PENDING_REVIEW durumunda kaydet

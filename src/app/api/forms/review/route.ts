@@ -2,8 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/db';
-import { formSubmissions } from '@/db/schema';
+import { formSubmissions, products, users } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
+import bcrypt from 'bcrypt';
+
+function slugify(text: string): string {
+  return text.toString().toLowerCase().trim()
+    .replace(/\s+/g, '.')
+    .replace(/[ğĞ]/g, 'g')
+    .replace(/[üÜ]/g, 'u')
+    .replace(/[şŞ]/g, 's')
+    .replace(/[ıİ]/g, 'i')
+    .replace(/[öÖ]/g, 'o')
+    .replace(/[çÇ]/g, 'c')
+    .replace(/[^a-z0-9.]/g, '');
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,7 +40,71 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Eksik parametreler (submissionId, dynamicData, status gereklidir)' }, { status: 400 });
     }
 
-    // 3. Veritabanında Kaydı Güncelle (Tenant İzolasyonunu Koru)
+    // 3. Otomatik Öğrenme (Auto-Learning Pipeline)
+    if (status === 'APPROVED') {
+      // 3.1. Ürün Adı Öğrenme
+      const urunAdi = (dynamicData.urunAdi || '').toString().trim();
+      if (urunAdi) {
+        const productExists = await db
+          .select()
+          .from(products)
+          .where(
+            and(
+              eq(products.tenantId, tenantId),
+              eq(products.productName, urunAdi)
+            )
+          )
+          .limit(1);
+
+        if (productExists.length === 0) {
+          console.log(`Auto-Learn: Yeni ürün sözlüğe ekleniyor -> ${urunAdi}`);
+          await db.insert(products).values({
+            tenantId,
+            productName: urunAdi,
+          });
+        }
+      }
+
+      // 3.2. Operatör/Personel İsimleri Öğrenme
+      if (Array.isArray(dynamicData.kontroller)) {
+        for (const row of dynamicData.kontroller) {
+          const operatorName = (row.kontrolEden || '').toString().trim();
+          if (operatorName) {
+            const userExists = await db
+              .select()
+              .from(users)
+              .where(
+                and(
+                  eq(users.tenantId, tenantId),
+                  eq(users.name, operatorName)
+                )
+              )
+              .limit(1);
+
+            if (userExists.length === 0) {
+              console.log(`Auto-Learn: Yeni operatör kullanıcı tablosuna ekleniyor -> ${operatorName}`);
+              const tempEmail = `${slugify(operatorName)}@temp-tenant.com`;
+              const tempPasswordHash = await bcrypt.hash('gida-operator-temp-pass', 10);
+              
+              try {
+                await db.insert(users).values({
+                  tenantId,
+                  name: operatorName,
+                  email: tempEmail,
+                  passwordHash: tempPasswordHash,
+                  role: 'VARDIYA_AMIRI',
+                });
+              } catch (e) {
+                // Email çakışması veya başka bir hata durumunda logla ve geç
+                console.warn(`Operatör eklenemedi (muhtemelen e-posta zaten var): ${tempEmail}`);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Veritabanında Kaydı Güncelle (Tenant İzolasyonunu Koru)
     console.log(`Form onaylanıyor/güncelleniyor. ID: ${submissionId}, Tenant: ${tenantId}`);
     const [updatedSubmission] = await db
       .update(formSubmissions)
@@ -40,7 +117,7 @@ export async function POST(req: NextRequest) {
       .where(
         and(
           eq(formSubmissions.id, submissionId),
-          eq(formSubmissions.tenantId, tenantId) // Güvenli izolasyon
+          eq(formSubmissions.tenantId, tenantId)
         )
       )
       .returning();

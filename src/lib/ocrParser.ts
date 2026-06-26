@@ -1,10 +1,11 @@
 import { db } from '../db';
-import { formTypes } from '../db/schema';
+import { formTypes, users, products } from '../db/schema';
 import { eq } from 'drizzle-orm';
 
 /**
  * OpenAI GPT-4o-mini modeline gönderilecek olan katı JSON şeması (Structured Outputs).
  * Bu şema, form yapısının her zaman tutarlı ve belirlenen alanlarla dönmesini garanti eder.
+ * Yeni 'urunAdi' alanı eklendi.
  */
 const strictOcrJsonSchema = {
   type: 'object',
@@ -16,6 +17,10 @@ const strictOcrJsonSchema = {
     formAdi: { 
       type: 'string', 
       description: 'Formun başlığı veya adı' 
+    },
+    urunAdi: {
+      type: 'string',
+      description: 'Formda kontrolü yapılan veya üretilen ana ürünün adı (Örn: Triton, Taco, Lavaş vb.)'
     },
     kontroller: {
       type: 'array',
@@ -49,7 +54,7 @@ const strictOcrJsonSchema = {
       description: 'Formun altında yer alan özel notlar, sapmalar veya açıklama kısımları' 
     }
   },
-  required: ['tarih', 'formAdi', 'kontroller', 'notlar'],
+  required: ['tarih', 'formAdi', 'urunAdi', 'kontroller', 'notlar'],
   additionalProperties: false
 };
 
@@ -57,8 +62,9 @@ const strictOcrJsonSchema = {
  * Görseli analiz edip form tipine göre yapılandırılmış JSON döndürür.
  * @param imageBuffer Önişlemeden geçmiş görsel buffer'ı
  * @param formTypeId İlgili formun veritabanındaki ID'si
+ * @param tenantId Fabrika Kiracı ID'si
  */
-export async function parseFormWithAI(imageBuffer: Buffer, formTypeId: string): Promise<Record<string, any>> {
+export async function parseFormWithAI(imageBuffer: Buffer, formTypeId: string, tenantId: string): Promise<Record<string, any>> {
   // 1. Form tipinin adını çek
   const [formType] = await db
     .select()
@@ -68,7 +74,14 @@ export async function parseFormWithAI(imageBuffer: Buffer, formTypeId: string): 
 
   const formName = formType ? formType.displayName : 'Genel Kalite Formu';
 
-  // 2. Base64 formatına dönüştür
+  // 2. Dinamik Sözlük Verilerini Veritabanından Çek (Fuzzy Match / Auto-Correct için)
+  const activeUsers = await db.select({ name: users.name }).from(users).where(eq(users.tenantId, tenantId));
+  const activeProducts = await db.select({ productName: products.productName }).from(products).where(eq(products.tenantId, tenantId));
+
+  const validUserList = activeUsers.map(u => u.name).join(', ');
+  const validProductList = activeProducts.map(p => p.productName).join(', ');
+
+  // 3. Base64 formatına dönüştür
   const base64Image = imageBuffer.toString('base64');
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -78,7 +91,7 @@ export async function parseFormWithAI(imageBuffer: Buffer, formTypeId: string): 
     return generateMockParsedData(formName);
   }
 
-  // 3. OpenAI Vision API Çağrısı (Structured Outputs - strict: true)
+  // 4. OpenAI Vision API Çağrısı (Structured Outputs - strict: true)
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -101,6 +114,12 @@ export async function parseFormWithAI(imageBuffer: Buffer, formTypeId: string): 
           content: `Sen bir gıda fabrikası kalite kontrol asistanısın. Görevin, yüklenen form görselindeki el yazısı tablo verilerini okuyarak jilet gibi temiz bir JSON objesine dönüştürmektir.
           
 Form Tipi: "${formName}"
+
+BAĞLAM VE DOĞRULAMA KILAVUZU:
+Yazıları okurken fabrikada kayıtlı olan güncel personel ve ürün listelerini baz al. Yazılar silik veya el yazısı nedeniyle kaymışsa (örneğin "Mehmet Düzenli" okuduysan ve listede "Mehmet Düvenci" varsa), listedeki doğru kelime ile eşleştirerek (fuzzy matching / auto-correct) düzelt.
+
+GEÇERLİ PERSONEL LİSTESİ: [${validUserList}]
+GEÇERLİ ÜRÜN LİSTESİ: [${validProductList}]
 
 Kurallar:
 1. Tablo satırlarını ve sütunlarını sırayla oku.
@@ -144,14 +163,15 @@ Kurallar:
 function generateMockParsedData(formName: string): Record<string, any> {
   const bugun = new Date().toISOString().split('T')[0];
   
-  if (formName.includes('Metal')) {
+  if (formName.includes('Metal') || formName.includes('Kontrol')) {
     return {
       tarih: bugun,
       formAdi: formName,
+      urunAdi: "Triton", // Auto-correct edilerek Triton yapıldı
       kontroller: [
-        { saat: "08:00", deger: "Fe: 1.5mm Ok, Non-Fe: 2.0mm Ok", uygunluk: true, kontrolEden: "Ahmet Usta" },
-        { saat: "12:00", deger: "Fe: 1.5mm Ok, Non-Fe: 2.0mm Ok", uygunluk: true, kontrolEden: "Ahmet Usta" },
-        { saat: "16:00", deger: "Sensörde un kalıntısı temizlendi", uygunluk: false, kontrolEden: "Mehmet Can" }
+        { saat: "08:00", deger: "Fe: 1.5mm Ok, Non-Fe: 2.0mm Ok", uygunluk: true, kontrolEden: "Mehmet Düvenci" }, // Düzeltilmiş isim
+        { saat: "12:00", deger: "Fe: 1.5mm Ok, Non-Fe: 2.0mm Ok", uygunluk: true, kontrolEden: "Mehmet Düvenci" },
+        { saat: "16:00", deger: "Sensörde un kalıntısı temizlendi", uygunluk: false, kontrolEden: "Mehmet Düvenci" }
       ],
       notlar: "Saat 16:00'da dedektörün etrafı temizlendi ve kalibrasyon testi tekrarlandı."
     };
@@ -160,9 +180,10 @@ function generateMockParsedData(formName: string): Record<string, any> {
   return {
     tarih: bugun,
     formAdi: formName,
+    urunAdi: "Taco",
     kontroller: [
-      { saat: "09:00", deger: "24.5 °C", uygunluk: true, kontrolEden: "Mustafa Vardiya" },
-      { saat: "15:00", deger: "25.2 °C", uygunluk: true, kontrolEden: "Mustafa Vardiya" }
+      { saat: "09:00", deger: "24.5 °C", uygunluk: true, kontrolEden: "Mehmet Düvenci" },
+      { saat: "15:00", deger: "25.2 °C", uygunluk: true, kontrolEden: "Mehmet Düvenci" }
     ],
     notlar: "Sıcaklık ve nem değerleri kritik limitler içerisindedir."
   };
