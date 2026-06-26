@@ -7,6 +7,12 @@ export const statusEnum = pgEnum('form_submission_status', ['PENDING_REVIEW', 'A
 // Kullanıcı rolleri için Enum tanımı
 export const roleEnum = pgEnum('user_role', ['FIRMA_SAHIBI', 'KALITE_MUDURU', 'VARDIYA_AMIRI']);
 
+// RAG Doküman işleme durumları için Enum tanımı
+export const documentStatusEnum = pgEnum('document_processing_status', ['PROCESSING', 'COMPLETED', 'FAILED']);
+
+// Chatbot mesajı gönderen taraflar için Enum tanımı
+export const senderEnum = pgEnum('message_sender', ['USER', 'AI']);
+
 // 1. Tenants (Fabrikalar / Kiracılar)
 export const tenants = pgTable('tenants', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -46,7 +52,7 @@ export const formSubmissions = pgTable('form_submissions', {
   formTypeId: uuid('form_type_id')
     .references(() => formTypes.id, { onDelete: 'restrict' })
     .notNull(),
-  rawImageUrl: text('raw_image_url').notNull(), // Supabase Storage'dan veya lokal disk/S3'ten gelecek görsel URL'i
+  rawImageUrl: text('raw_image_url').notNull(), // Yerel diskteki görsel URL'i
   dynamicData: jsonb('dynamic_data').notNull(),  // Formun OCR/düzenlenebilir input verileri
   status: statusEnum('status').default('PENDING_REVIEW').notNull(),
   verifiedBy: uuid('verified_by')
@@ -65,6 +71,43 @@ export const products = pgTable('products', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// 6. Documents (RAG Doküman Havuzu)
+export const documents = pgTable('documents', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id')
+    .references(() => tenants.id, { onDelete: 'cascade' })
+    .notNull(),
+  documentName: text('document_name').notNull(),
+  fileUrl: text('file_url').notNull(),
+  parsedText: text('parsed_text'), // PDF'ten çıkarılan ham metin
+  status: documentStatusEnum('status').default('PROCESSING').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// 7. Chatbot Sessions (Yapay Zeka Sohbet Oturumları)
+export const chatbotSessions = pgTable('chatbot_sessions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id')
+    .references(() => tenants.id, { onDelete: 'cascade' })
+    .notNull(),
+  userId: uuid('user_id')
+    .references(() => users.id, { onDelete: 'cascade' })
+    .notNull(),
+  title: text('title').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+// 8. Chatbot Messages (Sohbet Mesaj Geçmişi)
+export const chatbotMessages = pgTable('chatbot_messages', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionId: uuid('session_id')
+    .references(() => chatbotSessions.id, { onDelete: 'cascade' })
+    .notNull(),
+  message: text('message').notNull(),
+  sender: senderEnum('sender').notNull(), // USER veya AI
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
 // --- Tablo İlişkileri ---
 
 export const tenantsRelations = relations(tenants, ({ many }) => ({
@@ -72,6 +115,8 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
   products: many(products),
   formTypes: many(formTypes),
   formSubmissions: many(formSubmissions),
+  documents: many(documents),
+  chatbotSessions: many(chatbotSessions),
 }));
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -80,6 +125,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     references: [tenants.id],
   }),
   verifiedSubmissions: many(formSubmissions),
+  chatbotSessions: many(chatbotSessions),
 }));
 
 export const formTypesRelations = relations(formTypes, ({ one, many }) => ({
@@ -109,5 +155,31 @@ export const productsRelations = relations(products, ({ one }) => ({
   tenant: one(tenants, {
     fields: [products.tenantId],
     references: [tenants.id],
+  }),
+}));
+
+export const documentsRelations = relations(documents, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [documents.tenantId],
+    references: [tenants.id],
+  }),
+}));
+
+export const chatbotSessionsRelations = relations(chatbotSessions, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [chatbotSessions.tenantId],
+    references: [tenants.id],
+  }),
+  user: one(users, {
+    fields: [chatbotSessions.userId],
+    references: [users.id],
+  }),
+  messages: many(chatbotMessages),
+}));
+
+export const chatbotMessagesRelations = relations(chatbotMessages, ({ one }) => ({
+  session: one(chatbotSessions, {
+    fields: [chatbotMessages.sessionId],
+    references: [chatbotSessions.id],
   }),
 }));

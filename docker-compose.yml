@@ -28,6 +28,7 @@ services:
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       LICENSE_SECRET_KEY: ${LICENSE_SECRET_KEY:-novexistech-crypto-key}
       CENTRAL_LICENSE_API: https://licensing.novexistech.com/api/check
+      NOVEXIS_AI_URL: ${NOVEXIS_AI_URL:-http://localhost:5000/api/v1/vision}
     depends_on:
       - db
     volumes:
