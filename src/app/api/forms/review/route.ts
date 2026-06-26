@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       .set({
         dynamicData: dynamicData,
         status: status, // APPROVED veya PENDING_REVIEW
-        verifiedBy: session.user.id,
+        verifiedBy: (session.user as any).id,
         verifiedAt: new Date(),
       })
       .where(
